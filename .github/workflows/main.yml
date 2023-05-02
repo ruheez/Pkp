@@ -1,0 +1,78 @@
+name: Remote Desktop
+
+on:
+
+  push:
+
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+
+      - name: Set up QEMU and RDP
+
+        run: |
+
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+          Invoke-WebRequest -Uri https://raw.githubusercontent.com/niels9001/qemu-rdp-windows/main/qemu-rdp-windows.ps1 -OutFile qemu-rdp-windows.ps1
+
+          .\qemu-rdp-windows.ps1 -PortNumber 3389 -UserName "runneradmin" -Password "P!!@ssw0rd!"
+
+          ipconfig
+
+      - name: Expose RDP port to the internet
+
+        uses: tiangolo/ngrok-action@v2
+
+        with:
+
+          authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+          region: 'us'
+
+          proto: 'tcp'
+
+          addr: 3389
+
+      - name: Print ngrok URL
+
+        run: |
+
+          echo "RDP URL:"
+
+          echo "${{ env.NGROK_URL }}"
+
+      - name: Wait for 1 minute
+
+        run: |
+
+          echo "Waiting for 1 minute..."
+
+          sleep 60
+
+      - name: Connect to remote desktop
+
+        run: |
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "SecurityLayer" -Value 1
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthenMode" -Value 0
+
+          $ErrorActionPreference = "Stop"
+
+          $Info = mstsc.exe /v:$env:NGROK_URL /admin /f
+
+          $Info | Out-Default
+
